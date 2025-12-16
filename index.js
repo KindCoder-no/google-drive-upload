@@ -122,7 +122,9 @@ const getAuthenticatedDriveClient = async () => {
 
 // Check if API is configured
 const isConfigured = () => {
-    return adminTokens && adminTokens.refreshToken;
+    if(!adminTokens.refreshToken) return false;
+    return true
+    //return adminTokens && adminTokens.refreshToken;
 };
 
 // ============== ADMIN SETUP ENDPOINTS ==============
