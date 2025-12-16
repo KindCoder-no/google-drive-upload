@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Google Drive Upload API</title>
+    <title>Google Drive Upload</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -94,16 +94,20 @@
       }
       .method-post { background: #28a745; }
       .method-get { background: #007bff; }
-      .method-delete { background: #dc3545; }
-      .user-info {
-        background: rgba(66, 133, 244, 0.2);
+      .status-badge {
+        padding: 8px 16px;
         border-radius: 8px;
-        padding: 12px 16px;
+        font-weight: 500;
       }
-      .user-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
+      .status-configured {
+        background: rgba(40, 167, 69, 0.2);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+      }
+      .status-not-configured {
+        background: rgba(255, 193, 7, 0.2);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
       }
     </style>
   </head>
@@ -111,41 +115,38 @@
     <div class="container py-5">
       <div class="text-center mb-5">
         <h1 class="display-4 fw-bold">
-          <i class="bi bi-cloud-upload me-3"></i>Google Drive Upload API
+          <i class="bi bi-cloud-upload me-3"></i>Google Drive Upload
         </h1>
         <p class="lead text-white-50">
-          OAuth 2.0 powered file upload to your Google Drive
+          Upload files directly to Google Drive
         </p>
       </div>
 
-      <!-- Auth Section -->
-      <div class="row justify-content-center mb-4" id="authSection">
-        <div class="col-md-6">
-          <div class="upload-card p-4 text-center">
-            <div id="signedOut">
-              <h4 class="mb-4"><i class="bi bi-google me-2"></i>Sign in to Get Started</h4>
-              <p class="text-white-50 mb-4">Connect your Google account to upload files to your Drive</p>
-              <button class="btn btn-google-signin btn-lg px-5" id="signInBtn">
-                <svg width="20" height="20" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Sign in with Google
-              </button>
+      <!-- Status Section -->
+      <div class="row justify-content-center mb-4">
+        <div class="col-md-8">
+          <div class="upload-card p-4">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+              <div>
+                <h5 class="mb-1">API Status</h5>
+                <div id="statusInfo" class="text-white-50">Checking...</div>
+              </div>
+              <div id="statusBadge"></div>
             </div>
-            <div id="signedIn" class="d-none">
-              <div class="user-info d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center gap-3">
-                  <img id="userAvatar" class="user-avatar" src="" alt="User" />
-                  <div class="text-start">
-                    <div class="fw-bold" id="userName">User</div>
-                    <small class="text-white-50" id="userEmail">email@example.com</small>
-                  </div>
-                </div>
-                <button class="btn btn-outline-light btn-sm" id="signOutBtn">
-                  <i class="bi bi-box-arrow-right me-1"></i>Sign Out
+            
+            <!-- Admin Setup (only shown when not configured) -->
+            <div id="adminSetup" class="mt-4 pt-4 border-top border-secondary d-none">
+              <div class="text-center">
+                <h5 class="mb-3"><i class="bi bi-gear me-2"></i>Admin Setup Required</h5>
+                <p class="text-white-50 mb-4">Connect your Google account to enable file uploads</p>
+                <button class="btn btn-google-signin btn-lg px-5" id="adminSignInBtn">
+                  <svg width="20" height="20" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  Connect Google Account
                 </button>
               </div>
             </div>
@@ -153,7 +154,8 @@
         </div>
       </div>
 
-      <div class="row g-4" id="mainContent" style="display: none;">
+      <!-- Main Content (Upload + API Docs) -->
+      <div class="row g-4" id="mainContent">
         <!-- Upload Section -->
         <div class="col-lg-6">
           <div class="upload-card p-4 h-100">
@@ -163,16 +165,6 @@
               <i class="bi bi-cloud-arrow-up display-1 text-white-50"></i>
               <p class="mt-3 mb-0">Drag & drop files here or click to browse</p>
               <input type="file" id="fileInput" class="d-none" multiple />
-            </div>
-
-            <div class="mb-3">
-              <label for="folderId" class="form-label">Folder ID (optional)</label>
-              <input
-                type="text"
-                class="form-control bg-dark text-white border-secondary"
-                id="folderId"
-                placeholder="Enter Google Drive folder ID"
-              />
             </div>
 
             <div class="file-list mb-4" id="fileList"></div>
@@ -194,6 +186,12 @@
             </div>
 
             <div class="mt-3" id="uploadResult"></div>
+            
+            <!-- Not configured message -->
+            <div id="notConfiguredMsg" class="alert alert-warning mt-3 d-none">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              API not configured. Admin needs to connect their Google account first.
+            </div>
           </div>
         </div>
 
@@ -205,17 +203,9 @@
             <div class="endpoint">
               <div class="d-flex align-items-center mb-2">
                 <span class="method-badge method-get me-2">GET</span>
-                <code class="text-info">/api/auth/url</code>
+                <code class="text-info">/api/status</code>
               </div>
-              <small class="text-white-50">Get OAuth authorization URL</small>
-            </div>
-
-            <div class="endpoint">
-              <div class="d-flex align-items-center mb-2">
-                <span class="method-badge method-post me-2">POST</span>
-                <code class="text-info">/api/auth/token</code>
-              </div>
-              <small class="text-white-50">Exchange auth code for tokens</small>
+              <small class="text-white-50">Check if API is configured</small>
             </div>
 
             <div class="endpoint">
@@ -223,7 +213,7 @@
                 <span class="method-badge method-post me-2">POST</span>
                 <code class="text-info">/api/upload</code>
               </div>
-              <small class="text-white-50">Upload a single file (requires Bearer token)</small>
+              <small class="text-white-50">Upload a single file (no auth required)</small>
             </div>
 
             <div class="endpoint">
@@ -236,25 +226,24 @@
 
             <div class="endpoint">
               <div class="d-flex align-items-center mb-2">
-                <span class="method-badge method-get me-2">GET</span>
-                <code class="text-info">/api/files</code>
+                <span class="method-badge method-post me-2">POST</span>
+                <code class="text-info">/api/folders</code>
               </div>
-              <small class="text-white-50">List files in your Drive</small>
-            </div>
-
-            <div class="endpoint">
-              <div class="d-flex align-items-center mb-2">
-                <span class="method-badge method-delete me-2">DELETE</span>
-                <code class="text-info">/api/files/:fileId</code>
-              </div>
-              <small class="text-white-50">Delete a file</small>
+              <small class="text-white-50">Create a folder</small>
             </div>
 
             <div class="api-docs p-3 mt-4">
-              <small class="text-white-50">Example with access token:</small>
+              <small class="text-white-50">Example upload (no authentication needed):</small>
               <pre class="text-success mb-0 mt-2"><code>curl -X POST \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -F "file=@/path/to/file.pdf" \
+  https://your-api.vercel.app/api/upload</code></pre>
+            </div>
+
+            <div class="api-docs p-3 mt-3">
+              <small class="text-white-50">Upload to specific folder:</small>
+              <pre class="text-success mb-0 mt-2"><code>curl -X POST \
+  -F "file=@/path/to/file.pdf" \
+  -F "folderId=YOUR_FOLDER_ID" \
   https://your-api.vercel.app/api/upload</code></pre>
             </div>
           </div>
@@ -273,16 +262,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-      // Auth state
-      let accessToken = localStorage.getItem('accessToken');
-      let userInfo = JSON.parse(localStorage.getItem('userInfo') || 'null');
-
       // DOM elements
-      const signedOutSection = document.getElementById('signedOut');
-      const signedInSection = document.getElementById('signedIn');
-      const mainContent = document.getElementById('mainContent');
-      const signInBtn = document.getElementById('signInBtn');
-      const signOutBtn = document.getElementById('signOutBtn');
+      const adminSetup = document.getElementById('adminSetup');
+      const adminSignInBtn = document.getElementById('adminSignInBtn');
+      const statusInfo = document.getElementById('statusInfo');
+      const statusBadge = document.getElementById('statusBadge');
       const dropZone = document.getElementById('dropZone');
       const fileInput = document.getElementById('fileInput');
       const fileList = document.getElementById('fileList');
@@ -291,83 +275,55 @@
       const progressBar = document.getElementById('progressBar');
       const progressText = document.getElementById('progressText');
       const uploadResult = document.getElementById('uploadResult');
-      const folderIdInput = document.getElementById('folderId');
+      const notConfiguredMsg = document.getElementById('notConfiguredMsg');
 
       let selectedFiles = [];
+      let isConfigured = false;
 
-      // Check URL params for OAuth callback
+      // Check URL params for setup callback
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('access_token')) {
-        accessToken = urlParams.get('access_token');
-        localStorage.setItem('accessToken', accessToken);
-        
-        const email = urlParams.get('email');
-        if (email) {
-          userInfo = { email };
-          localStorage.setItem('userInfo', JSON.stringify(userInfo));
-        }
-        
-        // Clean URL
+      if (urlParams.get('setup') === 'success') {
+        alert('Google account connected successfully! Users can now upload files.');
         window.history.replaceState({}, document.title, '/');
       }
-
       if (urlParams.get('error')) {
-        alert('Authentication error: ' + urlParams.get('error'));
+        alert('Setup error: ' + urlParams.get('error'));
         window.history.replaceState({}, document.title, '/');
       }
 
-      // Update UI based on auth state
-      function updateAuthUI() {
-        if (accessToken) {
-          signedOutSection.classList.add('d-none');
-          signedInSection.classList.remove('d-none');
-          mainContent.style.display = 'flex';
-          
-          // Fetch user info if we don't have it
-          if (!userInfo || !userInfo.name) {
-            fetchUserInfo();
-          } else {
-            displayUserInfo();
-          }
-        } else {
-          signedOutSection.classList.remove('d-none');
-          signedInSection.classList.add('d-none');
-          mainContent.style.display = 'none';
-        }
-      }
-
-      async function fetchUserInfo() {
+      // Check API status on load
+      async function checkStatus() {
         try {
-          const response = await fetch('/api/auth/me', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-          });
+          const response = await fetch('/api/status');
           const data = await response.json();
           
-          if (data.success) {
-            userInfo = data.user;
-            localStorage.setItem('userInfo', JSON.stringify(userInfo));
-            displayUserInfo();
+          isConfigured = data.configured;
+          
+          if (isConfigured) {
+            statusInfo.innerHTML = `Connected to <strong>${data.admin.email}</strong>`;
+            statusBadge.innerHTML = '<span class="status-badge status-configured"><i class="bi bi-check-circle me-2"></i>Ready</span>';
+            adminSetup.classList.add('d-none');
+            notConfiguredMsg.classList.add('d-none');
+            uploadBtn.disabled = selectedFiles.length === 0;
           } else {
-            // Token might be expired
-            signOut();
+            statusInfo.textContent = 'Not configured - admin setup required';
+            statusBadge.innerHTML = '<span class="status-badge status-not-configured"><i class="bi bi-exclamation-circle me-2"></i>Setup Required</span>';
+            adminSetup.classList.remove('d-none');
+            notConfiguredMsg.classList.remove('d-none');
+            uploadBtn.disabled = true;
           }
         } catch (error) {
-          console.error('Error fetching user info:', error);
+          console.error('Error checking status:', error);
+          statusInfo.textContent = 'Error checking status';
         }
       }
 
-      function displayUserInfo() {
-        if (userInfo) {
-          document.getElementById('userName').textContent = userInfo.name || 'User';
-          document.getElementById('userEmail').textContent = userInfo.email || '';
-          document.getElementById('userAvatar').src = userInfo.picture || 'https://via.placeholder.com/40';
-        }
-      }
+      checkStatus();
 
-      // Sign in
-      signInBtn.addEventListener('click', async () => {
+      // Admin sign in
+      adminSignInBtn.addEventListener('click', async () => {
         try {
-          const response = await fetch('/api/auth/url');
+          const response = await fetch('/api/admin/auth/url');
           const data = await response.json();
           
           if (data.success) {
@@ -380,20 +336,6 @@
           alert('Failed to initiate sign in');
         }
       });
-
-      // Sign out
-      function signOut() {
-        accessToken = null;
-        userInfo = null;
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userInfo');
-        updateAuthUI();
-      }
-
-      signOutBtn.addEventListener('click', signOut);
-
-      // Initialize auth UI
-      updateAuthUI();
 
       // Drop zone events
       dropZone.addEventListener('click', () => fileInput.click());
@@ -420,7 +362,7 @@
       function handleFiles(files) {
         selectedFiles = Array.from(files);
         renderFileList();
-        uploadBtn.disabled = selectedFiles.length === 0;
+        uploadBtn.disabled = selectedFiles.length === 0 || !isConfigured;
       }
 
       function renderFileList() {
@@ -441,7 +383,7 @@
       function removeFile(index) {
         selectedFiles.splice(index, 1);
         renderFileList();
-        uploadBtn.disabled = selectedFiles.length === 0;
+        uploadBtn.disabled = selectedFiles.length === 0 || !isConfigured;
       }
 
       function formatFileSize(bytes) {
@@ -453,7 +395,7 @@
       }
 
       uploadBtn.addEventListener('click', async () => {
-        if (selectedFiles.length === 0 || !accessToken) return;
+        if (selectedFiles.length === 0 || !isConfigured) return;
 
         uploadBtn.disabled = true;
         progressContainer.classList.remove('d-none');
@@ -464,13 +406,9 @@
           
           if (selectedFiles.length === 1) {
             formData.append('file', selectedFiles[0]);
-            if (folderIdInput.value) {
-              formData.append('folderId', folderIdInput.value);
-            }
 
             const response = await fetch('/api/upload', {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${accessToken}` },
               body: formData,
             });
 
@@ -495,13 +433,9 @@
             selectedFiles.forEach(file => {
               formData.append('files', file);
             });
-            if (folderIdInput.value) {
-              formData.append('folderId', folderIdInput.value);
-            }
 
             const response = await fetch('/api/upload/multiple', {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${accessToken}` },
               body: formData,
             });
 
@@ -533,7 +467,7 @@
           setTimeout(() => {
             progressContainer.classList.add('d-none');
             progressBar.style.width = '0%';
-            uploadBtn.disabled = selectedFiles.length === 0;
+            uploadBtn.disabled = selectedFiles.length === 0 || !isConfigured;
           }, 2000);
         }
       });

@@ -5,6 +5,8 @@ const cors = require('cors');
 const multer = require('multer');
 const { google } = require('googleapis');
 const stream = require('stream');
+const fs = require('fs');
+const path = require('path');
 
 // Create Express app
 const app = express();
@@ -22,8 +24,34 @@ const upload = multer({
     },
 });
 
-// In-memory token storage (use Redis or database in production)
-const tokenStore = new Map();
+// Token storage file path
+const TOKEN_FILE = path.join(__dirname, '.tokens.json');
+
+// Load stored tokens from file
+const loadStoredTokens = () => {
+    try {
+        if (fs.existsSync(TOKEN_FILE)) {
+            const data = fs.readFileSync(TOKEN_FILE, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (error) {
+        console.error('Error loading tokens:', error);
+    }
+    return null;
+};
+
+// Save tokens to file
+const saveTokens = (tokens) => {
+    try {
+        fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2));
+        console.log('Tokens saved successfully');
+    } catch (error) {
+        console.error('Error saving tokens:', error);
+    }
+};
+
+// Admin tokens (loaded from file or environment)
+let adminTokens = loadStoredTokens();
 
 // OAuth2 Client Configuration
 const getOAuth2Client = () => {
@@ -34,33 +62,55 @@ const getOAuth2Client = () => {
     );
 };
 
-// Get Drive client with user's access token
-const getGoogleDriveClient = (accessToken) => {
+// Get authenticated Drive client using admin's refresh token
+const getAuthenticatedDriveClient = async () => {
+    if (!adminTokens || !adminTokens.refreshToken) {
+        throw new Error('Admin not authenticated. Please set up the API first.');
+    }
+
     const oauth2Client = getOAuth2Client();
-    oauth2Client.setCredentials({ access_token: accessToken });
+    oauth2Client.setCredentials({
+        refresh_token: adminTokens.refreshToken,
+    });
+
+    // Get fresh access token
+    try {
+        const { credentials } = await oauth2Client.refreshAccessToken();
+        oauth2Client.setCredentials(credentials);
+        
+        // Update stored tokens with new access token
+        adminTokens.accessToken = credentials.access_token;
+        adminTokens.expiryDate = credentials.expiry_date;
+        saveTokens(adminTokens);
+    } catch (error) {
+        console.error('Error refreshing token:', error);
+        throw new Error('Failed to refresh access token. Admin may need to re-authenticate.');
+    }
+
     return google.drive({ version: 'v3', auth: oauth2Client });
 };
 
-// Middleware to verify access token
-const requireAuth = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({
-            success: false,
-            error: 'Authorization header with Bearer token is required',
-        });
-    }
-
-    const accessToken = authHeader.substring(7);
-    req.accessToken = accessToken;
-    next();
+// Check if API is configured
+const isConfigured = () => {
+    return adminTokens && adminTokens.refreshToken;
 };
 
-// ============== AUTH ENDPOINTS ==============
+// ============== ADMIN SETUP ENDPOINTS ==============
 
-// Generate OAuth URL for user to authenticate
-app.get('/api/auth/url', (req, res) => {
+// Check if API is set up
+app.get('/api/status', (req, res) => {
+    res.json({
+        success: true,
+        configured: isConfigured(),
+        admin: adminTokens ? {
+            email: adminTokens.email,
+            name: adminTokens.name,
+        } : null,
+    });
+});
+
+// Generate OAuth URL for admin to authenticate (one-time setup)
+app.get('/api/admin/auth/url', (req, res) => {
     const oauth2Client = getOAuth2Client();
     
     const scopes = [
@@ -81,7 +131,7 @@ app.get('/api/auth/url', (req, res) => {
     });
 });
 
-// OAuth callback - exchange code for tokens
+// OAuth callback - exchange code for tokens and store as admin
 app.get('/api/auth/callback', async (req, res) => {
     const { code, error } = req.query;
 
@@ -102,127 +152,67 @@ app.get('/api/auth/callback', async (req, res) => {
         const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
         const userInfo = await oauth2.userinfo.get();
 
-        // Store tokens (in production, use a database)
-        const userId = userInfo.data.id;
-        tokenStore.set(userId, {
+        // Store as admin tokens
+        adminTokens = {
             accessToken: tokens.access_token,
             refreshToken: tokens.refresh_token,
             expiryDate: tokens.expiry_date,
             email: userInfo.data.email,
-        });
+            name: userInfo.data.name,
+            picture: userInfo.data.picture,
+            setupDate: new Date().toISOString(),
+        };
+        
+        // Save to file for persistence
+        saveTokens(adminTokens);
 
-        // Redirect to frontend with token
-        res.redirect(`/?access_token=${tokens.access_token}&email=${encodeURIComponent(userInfo.data.email)}`);
+        // Redirect to frontend with success
+        res.redirect('/?setup=success');
     } catch (error) {
         console.error('OAuth callback error:', error);
         res.redirect(`/?error=${encodeURIComponent(error.message)}`);
     }
 });
 
-// Exchange authorization code for tokens (for API clients)
-app.post('/api/auth/token', async (req, res) => {
-    const { code } = req.body;
-
-    if (!code) {
-        return res.status(400).json({
+// Disconnect admin account (protected by admin key)
+app.post('/api/admin/disconnect', (req, res) => {
+    const { adminKey } = req.body;
+    
+    // Require admin key from environment for security
+    if (process.env.ADMIN_KEY && adminKey !== process.env.ADMIN_KEY) {
+        return res.status(403).json({
             success: false,
-            error: 'Authorization code is required',
+            error: 'Invalid admin key',
         });
     }
 
+    adminTokens = null;
     try {
-        const oauth2Client = getOAuth2Client();
-        const { tokens } = await oauth2Client.getToken(code);
-
-        // Get user info
-        oauth2Client.setCredentials(tokens);
-        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-        const userInfo = await oauth2.userinfo.get();
-
-        res.json({
-            success: true,
-            accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
-            expiresIn: tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : 3600,
-            user: {
-                id: userInfo.data.id,
-                email: userInfo.data.email,
-                name: userInfo.data.name,
-                picture: userInfo.data.picture,
-            },
-        });
+        if (fs.existsSync(TOKEN_FILE)) {
+            fs.unlinkSync(TOKEN_FILE);
+        }
     } catch (error) {
-        console.error('Token exchange error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to exchange authorization code',
-        });
+        console.error('Error deleting token file:', error);
     }
+
+    res.json({
+        success: true,
+        message: 'Admin account disconnected',
+    });
 });
 
-// Refresh access token
-app.post('/api/auth/refresh', async (req, res) => {
-    const { refreshToken } = req.body;
+// ============== PUBLIC FILE ENDPOINTS ==============
 
-    if (!refreshToken) {
-        return res.status(400).json({
-            success: false,
-            error: 'Refresh token is required',
-        });
-    }
-
+// Upload file to admin's Google Drive (public endpoint)
+app.post('/api/upload', upload.single('file'), async (req, res) => {
     try {
-        const oauth2Client = getOAuth2Client();
-        oauth2Client.setCredentials({ refresh_token: refreshToken });
-        
-        const { credentials } = await oauth2Client.refreshAccessToken();
+        if (!isConfigured()) {
+            return res.status(503).json({
+                success: false,
+                error: 'API not configured. Admin needs to set up the connection first.',
+            });
+        }
 
-        res.json({
-            success: true,
-            accessToken: credentials.access_token,
-            expiresIn: credentials.expiry_date ? Math.floor((credentials.expiry_date - Date.now()) / 1000) : 3600,
-        });
-    } catch (error) {
-        console.error('Token refresh error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to refresh token',
-        });
-    }
-});
-
-// Get current user info
-app.get('/api/auth/me', requireAuth, async (req, res) => {
-    try {
-        const oauth2Client = getOAuth2Client();
-        oauth2Client.setCredentials({ access_token: req.accessToken });
-        
-        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-        const userInfo = await oauth2.userinfo.get();
-
-        res.json({
-            success: true,
-            user: {
-                id: userInfo.data.id,
-                email: userInfo.data.email,
-                name: userInfo.data.name,
-                picture: userInfo.data.picture,
-            },
-        });
-    } catch (error) {
-        console.error('Get user error:', error);
-        res.status(401).json({
-            success: false,
-            error: 'Invalid or expired access token',
-        });
-    }
-});
-
-// ============== FILE ENDPOINTS ==============
-
-// Upload file to Google Drive
-app.post('/api/upload', requireAuth, upload.single('file'), async (req, res) => {
-    try {
         if (!req.file) {
             return res.status(400).json({ 
                 success: false, 
@@ -230,8 +220,8 @@ app.post('/api/upload', requireAuth, upload.single('file'), async (req, res) => 
             });
         }
 
-        const drive = getGoogleDriveClient(req.accessToken);
-        const folderId = req.body.folderId;
+        const drive = await getAuthenticatedDriveClient();
+        const folderId = req.body.folderId || process.env.DEFAULT_FOLDER_ID;
 
         // Create a readable stream from buffer
         const bufferStream = new stream.PassThrough();
@@ -266,14 +256,6 @@ app.post('/api/upload', requireAuth, upload.single('file'), async (req, res) => 
         });
     } catch (error) {
         console.error('Upload error:', error);
-        
-        if (error.code === 401) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid or expired access token',
-            });
-        }
-        
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to upload file',
@@ -281,9 +263,16 @@ app.post('/api/upload', requireAuth, upload.single('file'), async (req, res) => 
     }
 });
 
-// Upload multiple files to Google Drive
-app.post('/api/upload/multiple', requireAuth, upload.array('files', 10), async (req, res) => {
+// Upload multiple files to admin's Google Drive (public endpoint)
+app.post('/api/upload/multiple', upload.array('files', 10), async (req, res) => {
     try {
+        if (!isConfigured()) {
+            return res.status(503).json({
+                success: false,
+                error: 'API not configured. Admin needs to set up the connection first.',
+            });
+        }
+
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ 
                 success: false, 
@@ -291,8 +280,8 @@ app.post('/api/upload/multiple', requireAuth, upload.array('files', 10), async (
             });
         }
 
-        const drive = getGoogleDriveClient(req.accessToken);
-        const folderId = req.body.folderId;
+        const drive = await getAuthenticatedDriveClient();
+        const folderId = req.body.folderId || process.env.DEFAULT_FOLDER_ID;
 
         const uploadPromises = req.files.map(async (file) => {
             const bufferStream = new stream.PassThrough();
@@ -332,14 +321,6 @@ app.post('/api/upload/multiple', requireAuth, upload.array('files', 10), async (
         });
     } catch (error) {
         console.error('Multiple upload error:', error);
-        
-        if (error.code === 401) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid or expired access token',
-            });
-        }
-        
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to upload files',
@@ -347,117 +328,19 @@ app.post('/api/upload/multiple', requireAuth, upload.array('files', 10), async (
     }
 });
 
-// List files in user's Drive
-app.get('/api/files', requireAuth, async (req, res) => {
+// Create folder in admin's Google Drive (public endpoint)
+app.post('/api/folders', async (req, res) => {
     try {
-        const drive = getGoogleDriveClient(req.accessToken);
-        const folderId = req.query.folderId;
-        const pageSize = parseInt(req.query.pageSize) || 20;
-        const pageToken = req.query.pageToken;
-
-        let query = 'trashed = false';
-        if (folderId) {
-            query += ` and '${folderId}' in parents`;
-        }
-
-        const response = await drive.files.list({
-            q: query,
-            pageSize: pageSize,
-            pageToken: pageToken,
-            fields: 'nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink)',
-            orderBy: 'createdTime desc',
-        });
-
-        res.json({
-            success: true,
-            files: response.data.files,
-            nextPageToken: response.data.nextPageToken,
-        });
-    } catch (error) {
-        console.error('List files error:', error);
-        
-        if (error.code === 401) {
-            return res.status(401).json({
+        if (!isConfigured()) {
+            return res.status(503).json({
                 success: false,
-                error: 'Invalid or expired access token',
+                error: 'API not configured. Admin needs to set up the connection first.',
             });
         }
-        
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to list files',
-        });
-    }
-});
 
-// Get file details
-app.get('/api/files/:fileId', requireAuth, async (req, res) => {
-    try {
-        const drive = getGoogleDriveClient(req.accessToken);
-        const { fileId } = req.params;
-
-        const response = await drive.files.get({
-            fileId: fileId,
-            fields: 'id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents',
-        });
-
-        res.json({
-            success: true,
-            file: response.data,
-        });
-    } catch (error) {
-        console.error('Get file error:', error);
-        
-        if (error.code === 401) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid or expired access token',
-            });
-        }
-        
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to get file details',
-        });
-    }
-});
-
-// Delete file
-app.delete('/api/files/:fileId', requireAuth, async (req, res) => {
-    try {
-        const drive = getGoogleDriveClient(req.accessToken);
-        const { fileId } = req.params;
-
-        await drive.files.delete({
-            fileId: fileId,
-        });
-
-        res.json({
-            success: true,
-            message: 'File deleted successfully',
-        });
-    } catch (error) {
-        console.error('Delete file error:', error);
-        
-        if (error.code === 401) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid or expired access token',
-            });
-        }
-        
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to delete file',
-        });
-    }
-});
-
-// Create folder
-app.post('/api/folders', requireAuth, async (req, res) => {
-    try {
-        const drive = getGoogleDriveClient(req.accessToken);
+        const drive = await getAuthenticatedDriveClient();
         const { folderName, parentFolderId } = req.body;
+        const defaultParent = process.env.DEFAULT_FOLDER_ID;
 
         if (!folderName) {
             return res.status(400).json({
@@ -469,7 +352,7 @@ app.post('/api/folders', requireAuth, async (req, res) => {
         const fileMetadata = {
             name: folderName,
             mimeType: 'application/vnd.google-apps.folder',
-            ...(parentFolderId && { parents: [parentFolderId] }),
+            ...(parentFolderId || defaultParent ? { parents: [parentFolderId || defaultParent] } : {}),
         };
 
         const response = await drive.files.create({
@@ -488,60 +371,9 @@ app.post('/api/folders', requireAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('Create folder error:', error);
-        
-        if (error.code === 401) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid or expired access token',
-            });
-        }
-        
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to create folder',
-        });
-    }
-});
-
-// Make file public (share with anyone)
-app.post('/api/files/:fileId/share', requireAuth, async (req, res) => {
-    try {
-        const drive = getGoogleDriveClient(req.accessToken);
-        const { fileId } = req.params;
-        const { role = 'reader' } = req.body;
-
-        await drive.permissions.create({
-            fileId: fileId,
-            requestBody: {
-                role: role,
-                type: 'anyone',
-            },
-        });
-
-        // Get updated file info with sharing link
-        const file = await drive.files.get({
-            fileId: fileId,
-            fields: 'id, name, webViewLink, webContentLink',
-        });
-
-        res.json({
-            success: true,
-            file: file.data,
-            message: 'File shared successfully',
-        });
-    } catch (error) {
-        console.error('Share file error:', error);
-        
-        if (error.code === 401) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid or expired access token',
-            });
-        }
-        
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to share file',
         });
     }
 });
@@ -550,7 +382,8 @@ app.post('/api/files/:fileId/share', requireAuth, async (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({
         success: true,
-        message: 'Google Drive Upload API (OAuth 2.0) is running',
+        message: 'Google Drive Upload API is running',
+        configured: isConfigured(),
         timestamp: new Date().toISOString(),
     });
 });
@@ -560,5 +393,11 @@ const port = process.env.PORT || 3000;
 
 // Listen on defined port
 app.listen(port, () => {
-    console.log(`Google Drive Upload API (OAuth 2.0) started on port ${port}`);
+    console.log(`Google Drive Upload API started on port ${port}`);
+    console.log(`API configured: ${isConfigured()}`);
+    if (isConfigured()) {
+        console.log(`Connected to: ${adminTokens.email}`);
+    } else {
+        console.log('Visit the web interface to set up admin authentication');
+    }
 });
