@@ -283,10 +283,19 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         });
     } catch (error) {
         console.error('Upload error:', error);
-        res.status(500).json({
+        
+        // Provide more detailed error information
+        const errorDetails = {
             success: false,
             error: error.message || 'Failed to upload file',
-        });
+        };
+        
+        // Include Google API error details if available
+        if (error.response && error.response.data) {
+            errorDetails.googleError = error.response.data;
+        }
+        
+        res.status(error.code || 500).json(errorDetails);
     }
 });
 
