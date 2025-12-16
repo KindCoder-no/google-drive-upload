@@ -1,19 +1,29 @@
 # Google Drive Upload API
 
-A simple REST API for uploading files to Google Drive, built with Express.js and deployable on Vercel.
+A REST API for uploading files to Google Drive using OAuth 2.0 authentication, built with Express.js and deployable on Vercel.
 
 ## Features
 
-- 📤 Upload single or multiple files
+- 🔐 OAuth 2.0 authentication (users sign in with their Google account)
+- 📤 Upload single or multiple files to user's own Drive
 - 📁 Create folders
 - 📋 List files in a folder
 - 🔍 Get file details
 - 🗑️ Delete files
 - 🔗 Share files publicly
-- 🎨 Beautiful web interface for testing
+- 🎨 Beautiful web interface with Google Sign-In
 
 ## API Endpoints
 
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/auth/url` | Get OAuth authorization URL |
+| POST | `/api/auth/token` | Exchange auth code for tokens |
+| POST | `/api/auth/refresh` | Refresh access token |
+| GET | `/api/auth/me` | Get current user info |
+
+### Files (require Bearer token)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/upload` | Upload a single file |
@@ -36,32 +46,22 @@ A simple REST API for uploading files to Google Drive, built with Express.js and
    - Search for "Google Drive API"
    - Click "Enable"
 
-### 2. Create a Service Account
+### 2. Create OAuth 2.0 Credentials
 
 1. Go to "APIs & Services" > "Credentials"
-2. Click "Create Credentials" > "Service Account"
-3. Fill in the service account details
-4. Click "Create and Continue"
-5. Grant the service account access (optional)
-6. Click "Done"
+2. Click "Create Credentials" > "OAuth client ID"
+3. If prompted, configure the OAuth consent screen:
+   - Choose "External" for user type
+   - Fill in app name, user support email, developer email
+   - Add scopes: `drive.file`, `userinfo.email`, `userinfo.profile`
+   - Add test users (your email) if in testing mode
+4. Select "Web application" as application type
+5. Add authorized redirect URIs:
+   - `http://localhost:3000/api/auth/callback` (for local dev)
+   - `https://your-domain.vercel.app/api/auth/callback` (for production)
+6. Click "Create" and save the Client ID and Client Secret
 
-### 3. Generate Service Account Key
-
-1. Click on the created service account
-2. Go to the "Keys" tab
-3. Click "Add Key" > "Create new key"
-4. Select "JSON" and click "Create"
-5. Save the downloaded JSON file securely
-
-### 4. Share Google Drive Folder with Service Account
-
-1. Create a folder in Google Drive (or use an existing one)
-2. Right-click the folder and select "Share"
-3. Add the service account email (found in the JSON key file as `client_email`)
-4. Give it "Editor" access
-5. Copy the folder ID from the URL (the long string after `/folders/`)
-
-### 5. Environment Variables
+### 3. Environment Variables
 
 Create a `.env` file based on `.env.example`:
 
@@ -72,12 +72,13 @@ cp .env.example .env
 Set the following environment variables:
 
 ```env
-GOOGLE_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
-GOOGLE_DRIVE_FOLDER_ID=your-folder-id
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/callback
 PORT=3000
 ```
 
-**For Vercel deployment:** Add these as environment variables in your Vercel project settings.
+**For Vercel deployment:** Add these as environment variables in your Vercel project settings. Update `GOOGLE_REDIRECT_URI` to your production URL.
 
 ## Local Development
 
@@ -93,50 +94,79 @@ The API will be available at `http://localhost:3000`
 
 ## Usage Examples
 
-### Upload a Single File
+### 1. Get OAuth URL and Authenticate
+
+```bash
+# Get the authorization URL
+curl http://localhost:3000/api/auth/url
+
+# User visits the URL, signs in, and gets redirected back with a code
+# Exchange the code for tokens:
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"code": "4/0AX4XfWg..."}' \
+  http://localhost:3000/api/auth/token
+```
+
+### 2. Upload a File (with access token)
 
 ```bash
 curl -X POST \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -F "file=@/path/to/your/file.pdf" \
-  -F "folderId=YOUR_FOLDER_ID" \
   http://localhost:3000/api/upload
 ```
 
-### Upload Multiple Files
+### 3. Upload Multiple Files
 
 ```bash
 curl -X POST \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -F "files=@/path/to/file1.pdf" \
   -F "files=@/path/to/file2.jpg" \
   http://localhost:3000/api/upload/multiple
 ```
 
-### List Files
+### 4. List Files
 
 ```bash
-curl http://localhost:3000/api/files?folderId=YOUR_FOLDER_ID
+curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  http://localhost:3000/api/files
 ```
 
-### Create a Folder
+### 5. Create a Folder
 
 ```bash
 curl -X POST \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"folderName": "My New Folder"}' \
   http://localhost:3000/api/folders
 ```
 
-### Share a File Publicly
+### 6. Share a File Publicly
 
 ```bash
 curl -X POST \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   http://localhost:3000/api/files/FILE_ID/share
 ```
 
-### Delete a File
+### 7. Delete a File
 
 ```bash
-curl -X DELETE http://localhost:3000/api/files/FILE_ID
+curl -X DELETE \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  http://localhost:3000/api/files/FILE_ID
+```
+
+### 8. Refresh Access Token
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "YOUR_REFRESH_TOKEN"}' \
+  http://localhost:3000/api/auth/refresh
 ```
 
 ## Deploy to Vercel
@@ -144,8 +174,12 @@ curl -X DELETE http://localhost:3000/api/files/FILE_ID
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/KindCoder-no/google-drive-upload)
 
 1. Click the button above or import your repo to Vercel
-2. Add the environment variables in the Vercel project settings
-3. Deploy!
+2. Add the environment variables in the Vercel project settings:
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `GOOGLE_REDIRECT_URI` (set to `https://your-domain.vercel.app/api/auth/callback`)
+3. Update your Google Cloud OAuth credentials to include the Vercel redirect URI
+4. Deploy!
 
 ## Response Format
 

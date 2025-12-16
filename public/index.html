@@ -57,6 +57,19 @@
         background: #3367d6;
         color: white;
       }
+      .btn-google-signin {
+        background: white;
+        border: 1px solid #ddd;
+        color: #444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .btn-google-signin:hover {
+        background: #f5f5f5;
+        color: #333;
+      }
       .progress {
         height: 6px;
         border-radius: 3px;
@@ -82,6 +95,16 @@
       .method-post { background: #28a745; }
       .method-get { background: #007bff; }
       .method-delete { background: #dc3545; }
+      .user-info {
+        background: rgba(66, 133, 244, 0.2);
+        border-radius: 8px;
+        padding: 12px 16px;
+      }
+      .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+      }
     </style>
   </head>
   <body class="text-white">
@@ -91,11 +114,46 @@
           <i class="bi bi-cloud-upload me-3"></i>Google Drive Upload API
         </h1>
         <p class="lead text-white-50">
-          A simple REST API to upload files to Google Drive
+          OAuth 2.0 powered file upload to your Google Drive
         </p>
       </div>
 
-      <div class="row g-4">
+      <!-- Auth Section -->
+      <div class="row justify-content-center mb-4" id="authSection">
+        <div class="col-md-6">
+          <div class="upload-card p-4 text-center">
+            <div id="signedOut">
+              <h4 class="mb-4"><i class="bi bi-google me-2"></i>Sign in to Get Started</h4>
+              <p class="text-white-50 mb-4">Connect your Google account to upload files to your Drive</p>
+              <button class="btn btn-google-signin btn-lg px-5" id="signInBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign in with Google
+              </button>
+            </div>
+            <div id="signedIn" class="d-none">
+              <div class="user-info d-flex align-items-center justify-content-between mb-3">
+                <div class="d-flex align-items-center gap-3">
+                  <img id="userAvatar" class="user-avatar" src="" alt="User" />
+                  <div class="text-start">
+                    <div class="fw-bold" id="userName">User</div>
+                    <small class="text-white-50" id="userEmail">email@example.com</small>
+                  </div>
+                </div>
+                <button class="btn btn-outline-light btn-sm" id="signOutBtn">
+                  <i class="bi bi-box-arrow-right me-1"></i>Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4" id="mainContent" style="display: none;">
         <!-- Upload Section -->
         <div class="col-lg-6">
           <div class="upload-card p-4 h-100">
@@ -146,10 +204,26 @@
             
             <div class="endpoint">
               <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-get me-2">GET</span>
+                <code class="text-info">/api/auth/url</code>
+              </div>
+              <small class="text-white-50">Get OAuth authorization URL</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-post me-2">POST</span>
+                <code class="text-info">/api/auth/token</code>
+              </div>
+              <small class="text-white-50">Exchange auth code for tokens</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
                 <span class="method-badge method-post me-2">POST</span>
                 <code class="text-info">/api/upload</code>
               </div>
-              <small class="text-white-50">Upload a single file (multipart/form-data)</small>
+              <small class="text-white-50">Upload a single file (requires Bearer token)</small>
             </div>
 
             <div class="endpoint">
@@ -165,15 +239,7 @@
                 <span class="method-badge method-get me-2">GET</span>
                 <code class="text-info">/api/files</code>
               </div>
-              <small class="text-white-50">List files in a folder</small>
-            </div>
-
-            <div class="endpoint">
-              <div class="d-flex align-items-center mb-2">
-                <span class="method-badge method-get me-2">GET</span>
-                <code class="text-info">/api/files/:fileId</code>
-              </div>
-              <small class="text-white-50">Get file details</small>
+              <small class="text-white-50">List files in your Drive</small>
             </div>
 
             <div class="endpoint">
@@ -184,35 +250,11 @@
               <small class="text-white-50">Delete a file</small>
             </div>
 
-            <div class="endpoint">
-              <div class="d-flex align-items-center mb-2">
-                <span class="method-badge method-post me-2">POST</span>
-                <code class="text-info">/api/folders</code>
-              </div>
-              <small class="text-white-50">Create a new folder</small>
-            </div>
-
-            <div class="endpoint">
-              <div class="d-flex align-items-center mb-2">
-                <span class="method-badge method-post me-2">POST</span>
-                <code class="text-info">/api/files/:fileId/share</code>
-              </div>
-              <small class="text-white-50">Share a file publicly</small>
-            </div>
-
-            <div class="endpoint">
-              <div class="d-flex align-items-center mb-2">
-                <span class="method-badge method-get me-2">GET</span>
-                <code class="text-info">/api/health</code>
-              </div>
-              <small class="text-white-50">API health check</small>
-            </div>
-
             <div class="api-docs p-3 mt-4">
-              <small class="text-white-50">Example cURL request:</small>
+              <small class="text-white-50">Example with access token:</small>
               <pre class="text-success mb-0 mt-2"><code>curl -X POST \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -F "file=@/path/to/file.pdf" \
-  -F "folderId=YOUR_FOLDER_ID" \
   https://your-api.vercel.app/api/upload</code></pre>
             </div>
           </div>
@@ -231,6 +273,16 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+      // Auth state
+      let accessToken = localStorage.getItem('accessToken');
+      let userInfo = JSON.parse(localStorage.getItem('userInfo') || 'null');
+
+      // DOM elements
+      const signedOutSection = document.getElementById('signedOut');
+      const signedInSection = document.getElementById('signedIn');
+      const mainContent = document.getElementById('mainContent');
+      const signInBtn = document.getElementById('signInBtn');
+      const signOutBtn = document.getElementById('signOutBtn');
       const dropZone = document.getElementById('dropZone');
       const fileInput = document.getElementById('fileInput');
       const fileList = document.getElementById('fileList');
@@ -242,6 +294,106 @@
       const folderIdInput = document.getElementById('folderId');
 
       let selectedFiles = [];
+
+      // Check URL params for OAuth callback
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('access_token')) {
+        accessToken = urlParams.get('access_token');
+        localStorage.setItem('accessToken', accessToken);
+        
+        const email = urlParams.get('email');
+        if (email) {
+          userInfo = { email };
+          localStorage.setItem('userInfo', JSON.stringify(userInfo));
+        }
+        
+        // Clean URL
+        window.history.replaceState({}, document.title, '/');
+      }
+
+      if (urlParams.get('error')) {
+        alert('Authentication error: ' + urlParams.get('error'));
+        window.history.replaceState({}, document.title, '/');
+      }
+
+      // Update UI based on auth state
+      function updateAuthUI() {
+        if (accessToken) {
+          signedOutSection.classList.add('d-none');
+          signedInSection.classList.remove('d-none');
+          mainContent.style.display = 'flex';
+          
+          // Fetch user info if we don't have it
+          if (!userInfo || !userInfo.name) {
+            fetchUserInfo();
+          } else {
+            displayUserInfo();
+          }
+        } else {
+          signedOutSection.classList.remove('d-none');
+          signedInSection.classList.add('d-none');
+          mainContent.style.display = 'none';
+        }
+      }
+
+      async function fetchUserInfo() {
+        try {
+          const response = await fetch('/api/auth/me', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          const data = await response.json();
+          
+          if (data.success) {
+            userInfo = data.user;
+            localStorage.setItem('userInfo', JSON.stringify(userInfo));
+            displayUserInfo();
+          } else {
+            // Token might be expired
+            signOut();
+          }
+        } catch (error) {
+          console.error('Error fetching user info:', error);
+        }
+      }
+
+      function displayUserInfo() {
+        if (userInfo) {
+          document.getElementById('userName').textContent = userInfo.name || 'User';
+          document.getElementById('userEmail').textContent = userInfo.email || '';
+          document.getElementById('userAvatar').src = userInfo.picture || 'https://via.placeholder.com/40';
+        }
+      }
+
+      // Sign in
+      signInBtn.addEventListener('click', async () => {
+        try {
+          const response = await fetch('/api/auth/url');
+          const data = await response.json();
+          
+          if (data.success) {
+            window.location.href = data.authUrl;
+          } else {
+            alert('Failed to get auth URL');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          alert('Failed to initiate sign in');
+        }
+      });
+
+      // Sign out
+      function signOut() {
+        accessToken = null;
+        userInfo = null;
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('userInfo');
+        updateAuthUI();
+      }
+
+      signOutBtn.addEventListener('click', signOut);
+
+      // Initialize auth UI
+      updateAuthUI();
 
       // Drop zone events
       dropZone.addEventListener('click', () => fileInput.click());
@@ -301,7 +453,7 @@
       }
 
       uploadBtn.addEventListener('click', async () => {
-        if (selectedFiles.length === 0) return;
+        if (selectedFiles.length === 0 || !accessToken) return;
 
         uploadBtn.disabled = true;
         progressContainer.classList.remove('d-none');
@@ -318,6 +470,7 @@
 
             const response = await fetch('/api/upload', {
               method: 'POST',
+              headers: { 'Authorization': `Bearer ${accessToken}` },
               body: formData,
             });
 
@@ -333,6 +486,8 @@
                   ${result.file.webViewLink ? `<br><a href="${result.file.webViewLink}" target="_blank" class="text-success">View in Google Drive</a>` : ''}
                 </div>
               `;
+              selectedFiles = [];
+              renderFileList();
             } else {
               throw new Error(result.error);
             }
@@ -346,6 +501,7 @@
 
             const response = await fetch('/api/upload/multiple', {
               method: 'POST',
+              headers: { 'Authorization': `Bearer ${accessToken}` },
               body: formData,
             });
 
@@ -360,6 +516,8 @@
                   ${result.files.length} files uploaded successfully!
                 </div>
               `;
+              selectedFiles = [];
+              renderFileList();
             } else {
               throw new Error(result.error);
             }
@@ -375,7 +533,7 @@
           setTimeout(() => {
             progressContainer.classList.add('d-none');
             progressBar.style.width = '0%';
-            uploadBtn.disabled = false;
+            uploadBtn.disabled = selectedFiles.length === 0;
           }, 2000);
         }
       });
