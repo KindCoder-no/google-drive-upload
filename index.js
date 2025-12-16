@@ -11,8 +11,17 @@ const path = require('path');
 // Create Express app
 const app = express();
 
-// Middleware
-app.use(cors());
+// CORS configuration - allow all origins for public API
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: false,
+}));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
+
 app.use(express.json());
 app.use(express.static(__dirname + '/public'));
 
