@@ -1,157 +1,81 @@
-# Google Drive Upload API - Usage Guide (OAuth 2.0)
+# Google Drive Upload API - Usage Guide
 
 Base URL: `https://your-api-domain.vercel.app`
 
-## Authentication
+## Overview
 
-This API uses **OAuth 2.0** for authentication. Users must authenticate with their Google account to upload files to their own Google Drive.
-
-### Authentication Flow
-
-1. **Get auth URL** → User visits the URL → User approves access → Redirect with auth code
-2. **Exchange auth code for tokens** → Get access token and refresh token
-3. **Use access token** in `Authorization: Bearer <token>` header for all API calls
+This API allows **public file uploads** to a pre-configured Google Drive account. No authentication is required for uploading files - the admin has already connected their Google account.
 
 ---
 
-## Auth Endpoints
+## Endpoints
 
-### 1. Get OAuth Authorization URL
+### 1. Check API Status
 
-**GET** `/api/auth/url`
+**GET** `/api/status`
 
-Returns the Google OAuth consent URL. Redirect users to this URL to authenticate.
+Check if the API is configured and ready to accept uploads.
 
 **Example Request:**
 ```bash
-curl "https://your-api.vercel.app/api/auth/url"
+curl "https://your-api.vercel.app/api/status"
 ```
 
 **Success Response (200):**
 ```json
 {
   "success": true,
-  "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?..."
-}
-```
-
----
-
-### 2. Exchange Auth Code for Tokens
-
-**POST** `/api/auth/token`
-
-**Content-Type:** `application/json`
-
-| Body Field | Type | Required | Description |
-|------------|------|----------|-------------|
-| code | string | Yes | Authorization code from OAuth callback |
-
-**Example Request:**
-```bash
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"code": "4/0AX4XfWg..."}' \
-  https://your-api.vercel.app/api/auth/token
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "accessToken": "ya29.a0AfH6SMB...",
-  "refreshToken": "1//0gYC...",
-  "expiresIn": 3599,
-  "user": {
-    "id": "123456789",
-    "email": "user@gmail.com",
-    "name": "John Doe",
-    "picture": "https://lh3.googleusercontent.com/..."
+  "configured": true,
+  "admin": {
+    "email": "admin@gmail.com",
+    "name": "Admin Name"
   }
 }
 ```
 
----
-
-### 3. Refresh Access Token
-
-**POST** `/api/auth/refresh`
-
-**Content-Type:** `application/json`
-
-| Body Field | Type | Required | Description |
-|------------|------|----------|-------------|
-| refreshToken | string | Yes | The refresh token from initial auth |
-
-**Example Request:**
-```bash
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"refreshToken": "1//0gYC..."}' \
-  https://your-api.vercel.app/api/auth/refresh
-```
-
-**Success Response (200):**
+**Not Configured Response (200):**
 ```json
 {
   "success": true,
-  "accessToken": "ya29.a0AfH6SMB...",
-  "expiresIn": 3599
+  "configured": false,
+  "admin": null
 }
 ```
 
 ---
 
-### 4. Get Current User
-
-**GET** `/api/auth/me`
-
-**Headers:** `Authorization: Bearer <access_token>`
-
-**Example Request:**
-```bash
-curl -H "Authorization: Bearer ya29.a0AfH6SMB..." \
-  https://your-api.vercel.app/api/auth/me
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "user": {
-    "id": "123456789",
-    "email": "user@gmail.com",
-    "name": "John Doe",
-    "picture": "https://lh3.googleusercontent.com/..."
-  }
-}
-```
-
----
-
-## File Endpoints
-
-**All file endpoints require the `Authorization: Bearer <access_token>` header.**
-
-### 1. Upload Single File
+### 2. Upload Single File
 
 **POST** `/api/upload`
 
-**Headers:** `Authorization: Bearer <access_token>`
 **Content-Type:** `multipart/form-data`
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| file | File | Yes | The file to upload |
+| file | file | Yes | The file to upload (max 50MB) |
+| fileName | string | No | Custom filename (defaults to original name) |
 | folderId | string | No | Google Drive folder ID to upload to |
-| fileName | string | No | Custom filename (defaults to original) |
 
 **Example Request:**
 ```bash
 curl -X POST \
-  -H "Authorization: Bearer ya29.a0AfH6SMB..." \
-  -F "file=@document.pdf" \
-  -F "folderId=1abc123def456" \
+  -F "file=@/path/to/document.pdf" \
+  https://your-api.vercel.app/api/upload
+```
+
+**Upload to Specific Folder:**
+```bash
+curl -X POST \
+  -F "file=@/path/to/document.pdf" \
+  -F "folderId=1abc123XYZ..." \
+  https://your-api.vercel.app/api/upload
+```
+
+**With Custom Filename:**
+```bash
+curl -X POST \
+  -F "file=@/path/to/document.pdf" \
+  -F "fileName=my-custom-name.pdf" \
   https://your-api.vercel.app/api/upload
 ```
 
@@ -160,37 +84,35 @@ curl -X POST \
 {
   "success": true,
   "file": {
-    "id": "1aBcDeFgHiJkLmNoPqRsTuVwXyZ",
+    "id": "1abc123XYZ...",
     "name": "document.pdf",
     "mimeType": "application/pdf",
-    "size": "102400",
-    "webViewLink": "https://drive.google.com/file/d/1aBc.../view",
-    "webContentLink": "https://drive.google.com/uc?id=1aBc..."
+    "size": "12345",
+    "webViewLink": "https://drive.google.com/file/d/1abc123XYZ.../view",
+    "webContentLink": "https://drive.google.com/uc?id=1abc123XYZ..."
   }
 }
 ```
 
 ---
 
-### 2. Upload Multiple Files
+### 3. Upload Multiple Files
 
 **POST** `/api/upload/multiple`
 
-**Headers:** `Authorization: Bearer <access_token>`
 **Content-Type:** `multipart/form-data`
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| files | File[] | Yes | Array of files (max 10) |
-| folderId | string | No | Google Drive folder ID |
+| files | files[] | Yes | Array of files to upload (max 10 files, 50MB each) |
+| folderId | string | No | Google Drive folder ID to upload to |
 
 **Example Request:**
 ```bash
 curl -X POST \
-  -H "Authorization: Bearer ya29.a0AfH6SMB..." \
-  -F "files=@file1.pdf" \
-  -F "files=@file2.jpg" \
-  -F "files=@file3.png" \
+  -F "files=@/path/to/file1.pdf" \
+  -F "files=@/path/to/file2.jpg" \
+  -F "files=@/path/to/file3.png" \
   https://your-api.vercel.app/api/upload/multiple
 ```
 
@@ -200,12 +122,20 @@ curl -X POST \
   "success": true,
   "files": [
     {
-      "id": "1aBc...",
+      "id": "1abc...",
       "name": "file1.pdf",
       "mimeType": "application/pdf",
-      "size": "102400",
-      "webViewLink": "https://drive.google.com/file/d/1aBc.../view",
-      "webContentLink": "https://drive.google.com/uc?id=1aBc..."
+      "size": "12345",
+      "webViewLink": "https://drive.google.com/file/d/.../view",
+      "webContentLink": "https://drive.google.com/uc?id=..."
+    },
+    {
+      "id": "2def...",
+      "name": "file2.jpg",
+      "mimeType": "image/jpeg",
+      "size": "54321",
+      "webViewLink": "https://drive.google.com/file/d/.../view",
+      "webContentLink": "https://drive.google.com/uc?id=..."
     }
   ]
 }
@@ -213,119 +143,30 @@ curl -X POST \
 
 ---
 
-### 3. List Files
-
-**GET** `/api/files`
-
-**Headers:** `Authorization: Bearer <access_token>`
-
-| Query Param | Type | Required | Description |
-|-------------|------|----------|-------------|
-| folderId | string | No | Folder ID to list files from |
-| pageSize | number | No | Results per page (default: 20) |
-| pageToken | string | No | Token for pagination |
-
-**Example Request:**
-```bash
-curl -H "Authorization: Bearer ya29.a0AfH6SMB..." \
-  "https://your-api.vercel.app/api/files?folderId=1abc123&pageSize=10"
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "files": [
-    {
-      "id": "1aBc...",
-      "name": "document.pdf",
-      "mimeType": "application/pdf",
-      "size": "102400",
-      "createdTime": "2024-01-15T10:30:00.000Z",
-      "modifiedTime": "2024-01-15T10:30:00.000Z",
-      "webViewLink": "https://drive.google.com/file/d/1aBc.../view",
-      "webContentLink": "https://drive.google.com/uc?id=1aBc..."
-    }
-  ],
-  "nextPageToken": "token_for_next_page_or_null"
-}
-```
-
----
-
-### 4. Get File Details
-
-**GET** `/api/files/:fileId`
-
-**Headers:** `Authorization: Bearer <access_token>`
-
-**Example Request:**
-```bash
-curl -H "Authorization: Bearer ya29.a0AfH6SMB..." \
-  "https://your-api.vercel.app/api/files/1aBcDeFgHiJkLmNoPqRsTuVwXyZ"
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "file": {
-    "id": "1aBcDeFgHiJkLmNoPqRsTuVwXyZ",
-    "name": "document.pdf",
-    "mimeType": "application/pdf",
-    "size": "102400",
-    "createdTime": "2024-01-15T10:30:00.000Z",
-    "modifiedTime": "2024-01-15T10:30:00.000Z",
-    "webViewLink": "https://drive.google.com/file/d/1aBc.../view",
-    "webContentLink": "https://drive.google.com/uc?id=1aBc...",
-    "parents": ["1parentFolderId"]
-  }
-}
-```
-
----
-
-### 5. Delete File
-
-**DELETE** `/api/files/:fileId`
-
-**Headers:** `Authorization: Bearer <access_token>`
-
-**Example Request:**
-```bash
-curl -X DELETE \
-  -H "Authorization: Bearer ya29.a0AfH6SMB..." \
-  "https://your-api.vercel.app/api/files/1aBcDeFgHiJkLmNoPqRsTuVwXyZ"
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "message": "File deleted successfully"
-}
-```
-
----
-
-### 6. Create Folder
+### 4. Create Folder
 
 **POST** `/api/folders`
 
-**Headers:** `Authorization: Bearer <access_token>`
 **Content-Type:** `application/json`
 
-| Body Field | Type | Required | Description |
-|------------|------|----------|-------------|
-| folderName | string | Yes | Name for the new folder |
-| parentFolderId | string | No | Parent folder ID |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| folderName | string | Yes | Name of the folder to create |
+| parentFolderId | string | No | Parent folder ID (creates at root if not specified) |
 
 **Example Request:**
 ```bash
 curl -X POST \
-  -H "Authorization: Bearer ya29.a0AfH6SMB..." \
   -H "Content-Type: application/json" \
-  -d '{"folderName": "My New Folder", "parentFolderId": "1abc123"}' \
+  -d '{"folderName": "Uploads"}' \
+  https://your-api.vercel.app/api/folders
+```
+
+**Create Subfolder:**
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"folderName": "Images", "parentFolderId": "1abc123..."}' \
   https://your-api.vercel.app/api/folders
 ```
 
@@ -334,67 +175,34 @@ curl -X POST \
 {
   "success": true,
   "folder": {
-    "id": "1NewFolderId123",
-    "name": "My New Folder",
+    "id": "1xyz789...",
+    "name": "Uploads",
     "mimeType": "application/vnd.google-apps.folder",
-    "webViewLink": "https://drive.google.com/drive/folders/1NewFolderId123"
+    "webViewLink": "https://drive.google.com/drive/folders/1xyz789..."
   }
 }
 ```
 
 ---
 
-### 7. Share File Publicly
-
-**POST** `/api/files/:fileId/share`
-
-**Headers:** `Authorization: Bearer <access_token>`
-**Content-Type:** `application/json`
-
-| Body Field | Type | Required | Description |
-|------------|------|----------|-------------|
-| role | string | No | Permission role: `reader` (default), `writer`, `commenter` |
-
-**Example Request:**
-```bash
-curl -X POST \
-  -H "Authorization: Bearer ya29.a0AfH6SMB..." \
-  -H "Content-Type: application/json" \
-  -d '{"role": "reader"}' \
-  https://your-api.vercel.app/api/files/1aBc123/share
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "file": {
-    "id": "1aBcDeFgHiJkLmNoPqRsTuVwXyZ",
-    "name": "document.pdf",
-    "webViewLink": "https://drive.google.com/file/d/1aBc.../view",
-    "webContentLink": "https://drive.google.com/uc?id=1aBc..."
-  },
-  "message": "File shared successfully"
-}
-```
-
----
-
-### 8. Health Check
+### 5. Health Check
 
 **GET** `/api/health`
+
+Check if the API server is running.
 
 **Example Request:**
 ```bash
 curl "https://your-api.vercel.app/api/health"
 ```
 
-**Success Response (200):**
+**Response (200):**
 ```json
 {
   "success": true,
-  "message": "Google Drive Upload API (OAuth 2.0) is running",
-  "timestamp": "2024-01-15T10:30:00.000Z"
+  "message": "Google Drive Upload API is running",
+  "configured": true,
+  "timestamp": "2024-12-16T12:00:00.000Z"
 }
 ```
 
@@ -407,118 +215,194 @@ All endpoints return errors in this format:
 ```json
 {
   "success": false,
-  "error": "Error description message"
+  "error": "Error message describing what went wrong"
 }
 ```
 
-**Common HTTP Status Codes:**
-- `400` - Bad Request (missing required fields)
-- `401` - Unauthorized (missing or invalid access token)
-- `500` - Server Error (Google API error or configuration issue)
+### Common Error Codes
+
+| Status | Error | Description |
+|--------|-------|-------------|
+| 400 | No file provided | Request missing file attachment |
+| 400 | Folder name is required | Missing folderName in request body |
+| 500 | Failed to upload file | Google Drive API error |
+| 503 | API not configured | Admin has not connected Google account |
 
 ---
 
-## Limits
+## JavaScript/TypeScript Examples
 
-- **Max file size:** 50MB per file
-- **Max files per batch:** 10 files
-- **Token expiry:** Access tokens expire in ~1 hour (use refresh token)
-- **Supported:** All file types
+### Upload File with Fetch
 
----
-
-## JavaScript/TypeScript Usage Examples
-
-### Complete OAuth Flow:
 ```javascript
-// 1. Get auth URL and redirect user
-const authResponse = await fetch('https://your-api.vercel.app/api/auth/url');
-const { authUrl } = await authResponse.json();
-window.location.href = authUrl;
-
-// 2. After redirect, exchange code for tokens (in callback handler)
-const code = new URLSearchParams(window.location.search).get('code');
-const tokenResponse = await fetch('https://your-api.vercel.app/api/auth/token', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ code })
-});
-const { accessToken, refreshToken, user } = await tokenResponse.json();
-
-// Store tokens securely
-localStorage.setItem('accessToken', accessToken);
-localStorage.setItem('refreshToken', refreshToken);
-```
-
-### Upload with access token:
-```javascript
-const formData = new FormData();
-formData.append('file', fileInput.files[0]);
-formData.append('folderId', 'YOUR_FOLDER_ID');
-
-const response = await fetch('https://your-api.vercel.app/api/upload', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${accessToken}`
-  },
-  body: formData
-});
-
-const result = await response.json();
-console.log(result.file.webViewLink);
-```
-
-### Refresh token when expired:
-```javascript
-async function refreshAccessToken() {
-  const refreshToken = localStorage.getItem('refreshToken');
+async function uploadFile(file) {
+  const formData = new FormData();
+  formData.append('file', file);
   
-  const response = await fetch('https://your-api.vercel.app/api/auth/refresh', {
+  const response = await fetch('https://your-api.vercel.app/api/upload', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken })
+    body: formData,
   });
   
-  const { accessToken } = await response.json();
-  localStorage.setItem('accessToken', accessToken);
-  return accessToken;
+  const result = await response.json();
+  
+  if (result.success) {
+    console.log('File uploaded:', result.file.webViewLink);
+    return result.file;
+  } else {
+    throw new Error(result.error);
+  }
 }
 ```
 
-### Create folder and upload workflow:
+### Upload Multiple Files
+
 ```javascript
-const accessToken = localStorage.getItem('accessToken');
-
-// 1. Create folder
-const folderRes = await fetch('https://your-api.vercel.app/api/folders', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${accessToken}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ folderName: 'Project Files' })
-});
-const { folder } = await folderRes.json();
-
-// 2. Upload file to folder
-const formData = new FormData();
-formData.append('file', file);
-formData.append('folderId', folder.id);
-
-const uploadRes = await fetch('https://your-api.vercel.app/api/upload', {
-  method: 'POST',
-  headers: { 'Authorization': `Bearer ${accessToken}` },
-  body: formData
-});
-const { file: uploadedFile } = await uploadRes.json();
-
-// 3. Share file publicly
-await fetch(`https://your-api.vercel.app/api/files/${uploadedFile.id}/share`, {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${accessToken}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ role: 'reader' })
-});
+async function uploadMultipleFiles(files) {
+  const formData = new FormData();
+  
+  files.forEach(file => {
+    formData.append('files', file);
+  });
+  
+  const response = await fetch('https://your-api.vercel.app/api/upload/multiple', {
+    method: 'POST',
+    body: formData,
+  });
+  
+  return response.json();
+}
 ```
+
+### Upload to Specific Folder
+
+```javascript
+async function uploadToFolder(file, folderId) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('folderId', folderId);
+  
+  const response = await fetch('https://your-api.vercel.app/api/upload', {
+    method: 'POST',
+    body: formData,
+  });
+  
+  return response.json();
+}
+```
+
+### Create Folder
+
+```javascript
+async function createFolder(folderName, parentFolderId = null) {
+  const response = await fetch('https://your-api.vercel.app/api/folders', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      folderName,
+      parentFolderId,
+    }),
+  });
+  
+  return response.json();
+}
+```
+
+---
+
+## Python Examples
+
+### Upload File
+
+```python
+import requests
+
+def upload_file(file_path):
+    url = "https://your-api.vercel.app/api/upload"
+    
+    with open(file_path, 'rb') as f:
+        files = {'file': f}
+        response = requests.post(url, files=files)
+    
+    result = response.json()
+    
+    if result['success']:
+        print(f"Uploaded: {result['file']['webViewLink']}")
+        return result['file']
+    else:
+        raise Exception(result['error'])
+
+# Usage
+upload_file('/path/to/document.pdf')
+```
+
+### Upload to Folder
+
+```python
+import requests
+
+def upload_to_folder(file_path, folder_id):
+    url = "https://your-api.vercel.app/api/upload"
+    
+    with open(file_path, 'rb') as f:
+        files = {'file': f}
+        data = {'folderId': folder_id}
+        response = requests.post(url, files=files, data=data)
+    
+    return response.json()
+
+# Usage
+upload_to_folder('/path/to/file.pdf', '1abc123XYZ...')
+```
+
+### Create Folder
+
+```python
+import requests
+
+def create_folder(folder_name, parent_id=None):
+    url = "https://your-api.vercel.app/api/folders"
+    
+    data = {'folderName': folder_name}
+    if parent_id:
+        data['parentFolderId'] = parent_id
+    
+    response = requests.post(url, json=data)
+    return response.json()
+
+# Usage
+create_folder('My Uploads')
+```
+
+---
+
+## Rate Limits & Restrictions
+
+- **Max file size:** 50MB per file
+- **Max files per request:** 10 files (for `/api/upload/multiple`)
+- **Google Drive API limits:** Subject to Google's API quotas
+
+---
+
+## Getting a Folder ID
+
+To upload to a specific folder, you need its folder ID:
+
+1. Open Google Drive in your browser
+2. Navigate to the folder
+3. Look at the URL: `https://drive.google.com/drive/folders/1abc123XYZ...`
+4. The folder ID is the part after `/folders/`: `1abc123XYZ...`
+
+---
+
+## MCP/AI Tool Integration
+
+This API is designed to work seamlessly with AI tools. Simply provide the base URL and the AI can:
+
+1. Check status with `GET /api/status`
+2. Upload files with `POST /api/upload`
+3. Create folders with `POST /api/folders`
+
+No authentication headers required!
