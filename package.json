@@ -1,25 +1,33 @@
 {
-  "name": "vercel-html-hosting-template",
+  "name": "google-drive-upload-api",
   "version": "1.0.0",
-  "description": "This is a repository template to host static html/css webpages on https://vercel.app",
+  "description": "A REST API for uploading files to Google Drive",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KindCoder-no/vercel-html-hosting-template.git"
+    "url": "git+https://github.com/KindCoder-no/google-drive-upload.git"
   },
   "keywords": [
+    "Google Drive",
+    "Upload",
+    "API",
     "Vercel"
   ],
   "author": "Emre Sanden (KindCoder-no)",
-  "license": "Abstyles",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/KindCoder-no/vercel-html-hosting-template/issues"
+    "url": "https://github.com/KindCoder-no/google-drive-upload/issues"
   },
-  "homepage": "https://github.com/KindCoder-no/vercel-html-hosting-template#readme",
+  "homepage": "https://github.com/KindCoder-no/google-drive-upload#readme",
   "dependencies": {
-    "express": "^4.19.2"
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.19.2",
+    "googleapis": "^131.0.0",
+    "multer": "^2.0.2"
   }
 }

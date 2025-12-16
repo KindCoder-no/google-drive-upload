@@ -1,83 +1,384 @@
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>It is working!</title>
+    <title>Google Drive Upload API</title>
     <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
       rel="stylesheet"
-      integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65"
+      integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
       crossorigin="anonymous"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css"
+    />
+    <style>
+      body {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        min-height: 100vh;
+      }
+      .upload-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+      }
+      .drop-zone {
+        border: 2px dashed rgba(255, 255, 255, 0.3);
+        border-radius: 12px;
+        padding: 60px 20px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+      .drop-zone:hover,
+      .drop-zone.dragover {
+        border-color: #4285f4;
+        background: rgba(66, 133, 244, 0.1);
+      }
+      .file-list {
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .file-item {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 8px;
+      }
+      .btn-google {
+        background: #4285f4;
+        border: none;
+        color: white;
+      }
+      .btn-google:hover {
+        background: #3367d6;
+        color: white;
+      }
+      .progress {
+        height: 6px;
+        border-radius: 3px;
+      }
+      .api-docs {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 0.85rem;
+      }
+      .endpoint {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+      .method-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+      .method-post { background: #28a745; }
+      .method-get { background: #007bff; }
+      .method-delete { background: #dc3545; }
+    </style>
   </head>
-  <body style="background-color: gray">
-    <div class="text-center text-white">
-      <div class="mt-5"></div>
-      <h1>It is working!</h1>
-      <div class="mt-5"></div>
-      <p>
-        If you see this page you have correctly setup your vercel deployment!
-      </p>
-      <p>If this template helped you, consider starring the repo on Github</p>
-      <!-- Place this tag where you want the button to render. -->
-      <!-- Place this tag where you want the button to render. -->
-      <!-- Place this tag where you want the button to render. -->
-      <a
-        class="github-button"
-        href="https://github.com/KindCoder-no/vercel-html-hosting-template"
-        data-icon="octicon-star"
-        data-size="large"
-        data-show-count="true"
-        aria-label="Star KindCoder-no/vercel-html-hosting-template on GitHub"
-        >Star</a
-      >
-      <a
-        class="github-button"
-        href="https://github.com/KindCoder-no/vercel-html-hosting-template/generate"
-        data-icon="octicon-repo-template"
-        data-size="large"
-        aria-label="Use this template KindCoder-no/vercel-html-hosting-template on GitHub"
-        >Use this template</a
-      >
-      <!-- Place this tag where you want the button to render. -->
-      <div class="mt-5"></div>
-      <p>
-        Consider donating to help me improve and create other templates/Open
-        source projects
-      </p>
-      <script
-        type="text/javascript"
-        src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js"
-        data-name="bmc-button"
-        data-slug="KindCoder"
-        data-color="#FFDD00"
-        data-emoji=""
-        data-font="Comic"
-        data-text="Buy me a coffee"
-        data-outline-color="#000000"
-        data-font-color="#000000"
-        data-coffee-color="#ffffff"
-      ></script>
-      <div class="mt-5"></div>
-      <p>Some of my other Open Source projects:</p>
-      <ul>
-        <a href="https://github.com/KindCoder-no/node-vipps-api"
-          >https://github.com/KindCoder-no/node-vipps-api</a
-        ><br />
-        <a href="https://github.com/KindCoder-no/FiveM-YoutubeLoadingScreen"
-          >https://github.com/KindCoder-no/FiveM-YoutubeLoadingScreen</a
-        ><br />
-        <a href="https://github.com/KindCoder-no/infoscreen"
-          >https://github.com/KindCoder-no/infoscreen</a
-        >
-      </ul>
+  <body class="text-white">
+    <div class="container py-5">
+      <div class="text-center mb-5">
+        <h1 class="display-4 fw-bold">
+          <i class="bi bi-cloud-upload me-3"></i>Google Drive Upload API
+        </h1>
+        <p class="lead text-white-50">
+          A simple REST API to upload files to Google Drive
+        </p>
+      </div>
+
+      <div class="row g-4">
+        <!-- Upload Section -->
+        <div class="col-lg-6">
+          <div class="upload-card p-4 h-100">
+            <h4 class="mb-4"><i class="bi bi-upload me-2"></i>Upload Files</h4>
+            
+            <div class="drop-zone text-center mb-4" id="dropZone">
+              <i class="bi bi-cloud-arrow-up display-1 text-white-50"></i>
+              <p class="mt-3 mb-0">Drag & drop files here or click to browse</p>
+              <input type="file" id="fileInput" class="d-none" multiple />
+            </div>
+
+            <div class="mb-3">
+              <label for="folderId" class="form-label">Folder ID (optional)</label>
+              <input
+                type="text"
+                class="form-control bg-dark text-white border-secondary"
+                id="folderId"
+                placeholder="Enter Google Drive folder ID"
+              />
+            </div>
+
+            <div class="file-list mb-4" id="fileList"></div>
+
+            <button class="btn btn-google btn-lg w-100" id="uploadBtn" disabled>
+              <i class="bi bi-cloud-upload me-2"></i>Upload to Google Drive
+            </button>
+
+            <div class="mt-3 d-none" id="progressContainer">
+              <div class="progress">
+                <div
+                  class="progress-bar bg-success"
+                  id="progressBar"
+                  role="progressbar"
+                  style="width: 0%"
+                ></div>
+              </div>
+              <small class="text-white-50" id="progressText">Uploading...</small>
+            </div>
+
+            <div class="mt-3" id="uploadResult"></div>
+          </div>
+        </div>
+
+        <!-- API Documentation -->
+        <div class="col-lg-6">
+          <div class="upload-card p-4 h-100">
+            <h4 class="mb-4"><i class="bi bi-code-slash me-2"></i>API Endpoints</h4>
+            
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-post me-2">POST</span>
+                <code class="text-info">/api/upload</code>
+              </div>
+              <small class="text-white-50">Upload a single file (multipart/form-data)</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-post me-2">POST</span>
+                <code class="text-info">/api/upload/multiple</code>
+              </div>
+              <small class="text-white-50">Upload multiple files (max 10)</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-get me-2">GET</span>
+                <code class="text-info">/api/files</code>
+              </div>
+              <small class="text-white-50">List files in a folder</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-get me-2">GET</span>
+                <code class="text-info">/api/files/:fileId</code>
+              </div>
+              <small class="text-white-50">Get file details</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-delete me-2">DELETE</span>
+                <code class="text-info">/api/files/:fileId</code>
+              </div>
+              <small class="text-white-50">Delete a file</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-post me-2">POST</span>
+                <code class="text-info">/api/folders</code>
+              </div>
+              <small class="text-white-50">Create a new folder</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-post me-2">POST</span>
+                <code class="text-info">/api/files/:fileId/share</code>
+              </div>
+              <small class="text-white-50">Share a file publicly</small>
+            </div>
+
+            <div class="endpoint">
+              <div class="d-flex align-items-center mb-2">
+                <span class="method-badge method-get me-2">GET</span>
+                <code class="text-info">/api/health</code>
+              </div>
+              <small class="text-white-50">API health check</small>
+            </div>
+
+            <div class="api-docs p-3 mt-4">
+              <small class="text-white-50">Example cURL request:</small>
+              <pre class="text-success mb-0 mt-2"><code>curl -X POST \
+  -F "file=@/path/to/file.pdf" \
+  -F "folderId=YOUR_FOLDER_ID" \
+  https://your-api.vercel.app/api/upload</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-center mt-5">
+        <p class="text-white-50">
+          <i class="bi bi-github me-2"></i>
+          <a href="https://github.com/KindCoder-no/google-drive-upload" class="text-white">
+            View on GitHub
+          </a>
+        </p>
+      </div>
     </div>
-    <script async defer src="https://buttons.github.io/buttons.js"></script>
-    <script
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"
-      integrity="sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4"
-      crossorigin="anonymous"
-    ></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      const dropZone = document.getElementById('dropZone');
+      const fileInput = document.getElementById('fileInput');
+      const fileList = document.getElementById('fileList');
+      const uploadBtn = document.getElementById('uploadBtn');
+      const progressContainer = document.getElementById('progressContainer');
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      const uploadResult = document.getElementById('uploadResult');
+      const folderIdInput = document.getElementById('folderId');
+
+      let selectedFiles = [];
+
+      // Drop zone events
+      dropZone.addEventListener('click', () => fileInput.click());
+      
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+
+      dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+      });
+
+      function handleFiles(files) {
+        selectedFiles = Array.from(files);
+        renderFileList();
+        uploadBtn.disabled = selectedFiles.length === 0;
+      }
+
+      function renderFileList() {
+        fileList.innerHTML = selectedFiles.map((file, index) => `
+          <div class="file-item d-flex align-items-center justify-content-between">
+            <div>
+              <i class="bi bi-file-earmark me-2"></i>
+              <span>${file.name}</span>
+              <small class="text-white-50 ms-2">(${formatFileSize(file.size)})</small>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+        `).join('');
+      }
+
+      function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        renderFileList();
+        uploadBtn.disabled = selectedFiles.length === 0;
+      }
+
+      function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      }
+
+      uploadBtn.addEventListener('click', async () => {
+        if (selectedFiles.length === 0) return;
+
+        uploadBtn.disabled = true;
+        progressContainer.classList.remove('d-none');
+        uploadResult.innerHTML = '';
+
+        try {
+          const formData = new FormData();
+          
+          if (selectedFiles.length === 1) {
+            formData.append('file', selectedFiles[0]);
+            if (folderIdInput.value) {
+              formData.append('folderId', folderIdInput.value);
+            }
+
+            const response = await fetch('/api/upload', {
+              method: 'POST',
+              body: formData,
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+              progressBar.style.width = '100%';
+              progressText.textContent = 'Upload complete!';
+              uploadResult.innerHTML = `
+                <div class="alert alert-success">
+                  <i class="bi bi-check-circle me-2"></i>
+                  File uploaded successfully!
+                  ${result.file.webViewLink ? `<br><a href="${result.file.webViewLink}" target="_blank" class="text-success">View in Google Drive</a>` : ''}
+                </div>
+              `;
+            } else {
+              throw new Error(result.error);
+            }
+          } else {
+            selectedFiles.forEach(file => {
+              formData.append('files', file);
+            });
+            if (folderIdInput.value) {
+              formData.append('folderId', folderIdInput.value);
+            }
+
+            const response = await fetch('/api/upload/multiple', {
+              method: 'POST',
+              body: formData,
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+              progressBar.style.width = '100%';
+              progressText.textContent = 'Upload complete!';
+              uploadResult.innerHTML = `
+                <div class="alert alert-success">
+                  <i class="bi bi-check-circle me-2"></i>
+                  ${result.files.length} files uploaded successfully!
+                </div>
+              `;
+            } else {
+              throw new Error(result.error);
+            }
+          }
+        } catch (error) {
+          uploadResult.innerHTML = `
+            <div class="alert alert-danger">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              Error: ${error.message}
+            </div>
+          `;
+        } finally {
+          setTimeout(() => {
+            progressContainer.classList.add('d-none');
+            progressBar.style.width = '0%';
+            uploadBtn.disabled = false;
+          }, 2000);
+        }
+      });
+    </script>
   </body>
 </html>
