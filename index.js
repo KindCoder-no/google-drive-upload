@@ -24,14 +24,26 @@ const upload = multer({
     },
 });
 
-// Token storage file path
+// Token storage file path (for local development)
 const TOKEN_FILE = path.join(__dirname, '.tokens.json');
 
-// Load stored tokens from file
+// Load stored tokens from file OR environment variable
 const loadStoredTokens = () => {
+    // First, check for refresh token in environment variable (for Vercel/serverless)
+    if (process.env.GOOGLE_REFRESH_TOKEN) {
+        console.log('Loading tokens from environment variable');
+        return {
+            refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+            email: process.env.ADMIN_EMAIL || 'admin@configured.com',
+            name: process.env.ADMIN_NAME || 'Admin',
+        };
+    }
+    
+    // Fall back to file storage (for local development)
     try {
         if (fs.existsSync(TOKEN_FILE)) {
             const data = fs.readFileSync(TOKEN_FILE, 'utf8');
+            console.log('Loading tokens from file');
             return JSON.parse(data);
         }
     } catch (error) {
@@ -40,11 +52,20 @@ const loadStoredTokens = () => {
     return null;
 };
 
-// Save tokens to file
+// Save tokens to file (for local development)
 const saveTokens = (tokens) => {
     try {
         fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2));
-        console.log('Tokens saved successfully');
+        console.log('Tokens saved to file');
+        console.log('');
+        console.log('='.repeat(60));
+        console.log('IMPORTANT: For Vercel deployment, add this environment variable:');
+        console.log('='.repeat(60));
+        console.log(`GOOGLE_REFRESH_TOKEN=${tokens.refreshToken}`);
+        console.log(`ADMIN_EMAIL=${tokens.email}`);
+        console.log(`ADMIN_NAME=${tokens.name}`);
+        console.log('='.repeat(60));
+        console.log('');
     } catch (error) {
         console.error('Error saving tokens:', error);
     }
@@ -163,11 +184,17 @@ app.get('/api/auth/callback', async (req, res) => {
             setupDate: new Date().toISOString(),
         };
         
-        // Save to file for persistence
+        // Save to file for persistence (local dev)
         saveTokens(adminTokens);
 
-        // Redirect to frontend with success
-        res.redirect('/?setup=success');
+        // For Vercel: redirect with refresh token so user can copy it
+        // In production, you'd want a more secure way to handle this
+        const params = new URLSearchParams({
+            setup: 'success',
+            refresh_token: tokens.refresh_token,
+            email: userInfo.data.email,
+        });
+        res.redirect(`/?${params.toString()}`);
     } catch (error) {
         console.error('OAuth callback error:', error);
         res.redirect(`/?error=${encodeURIComponent(error.message)}`);

@@ -283,8 +283,51 @@
       // Check URL params for setup callback
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('setup') === 'success') {
-        alert('Google account connected successfully! Users can now upload files.');
-        window.history.replaceState({}, document.title, '/');
+        const refreshToken = urlParams.get('refresh_token');
+        const email = urlParams.get('email');
+        
+        if (refreshToken) {
+          // Show the refresh token for the user to copy
+          const message = `✅ Google account connected successfully!\n\n` +
+            `📧 Email: ${email}\n\n` +
+            `🔑 For Vercel deployment, add these environment variables:\n\n` +
+            `GOOGLE_REFRESH_TOKEN=${refreshToken}\n` +
+            `ADMIN_EMAIL=${email}\n\n` +
+            `Copy the refresh token now - it won't be shown again!`;
+          
+          // Create a modal to show the token
+          const tokenDiv = document.createElement('div');
+          tokenDiv.innerHTML = `
+            <div class="modal fade show" style="display:block;background:rgba(0,0,0,0.8)" id="tokenModal">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content bg-dark text-white">
+                  <div class="modal-header border-secondary">
+                    <h5 class="modal-title"><i class="bi bi-check-circle text-success me-2"></i>Setup Complete!</h5>
+                  </div>
+                  <div class="modal-body">
+                    <p class="text-success mb-3">Google account connected: <strong>${email}</strong></p>
+                    <p class="mb-2">Add this environment variable to Vercel:</p>
+                    <div class="bg-black p-3 rounded mb-3">
+                      <code class="text-warning" style="word-break:break-all;">GOOGLE_REFRESH_TOKEN=${refreshToken}</code>
+                    </div>
+                    <button class="btn btn-outline-light btn-sm" onclick="navigator.clipboard.writeText('${refreshToken}').then(() => alert('Copied!'))">
+                      <i class="bi bi-clipboard me-1"></i>Copy Refresh Token
+                    </button>
+                  </div>
+                  <div class="modal-footer border-secondary">
+                    <button class="btn btn-success" onclick="document.getElementById('tokenModal').remove(); window.history.replaceState({}, document.title, '/');">
+                      Done - I've saved the token
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(tokenDiv);
+        } else {
+          alert('Google account connected successfully!');
+          window.history.replaceState({}, document.title, '/');
+        }
       }
       if (urlParams.get('error')) {
         alert('Setup error: ' + urlParams.get('error'));
