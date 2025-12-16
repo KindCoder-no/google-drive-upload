@@ -137,6 +137,7 @@ app.get('/api/status', (req, res) => {
         success: true,
         configured: isConfigured(),
         defaultFolderId: process.env.DEFAULT_FOLDER_ID || null,
+        
         admin: adminTokens ? {
             email: adminTokens.email,
             name: adminTokens.name,
