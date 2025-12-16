@@ -137,7 +137,7 @@ app.get('/api/status', (req, res) => {
         success: true,
         configured: isConfigured(),
         defaultFolderId: process.env.DEFAULT_FOLDER_ID || null,
-        
+
         admin: adminTokens ? {
             email: adminTokens.email,
             name: adminTokens.name,
@@ -244,6 +244,103 @@ app.post('/api/admin/disconnect', (req, res) => {
 });
 
 // ============== PUBLIC FILE ENDPOINTS ==============
+
+// Get resumable upload URL for large files (bypasses Vercel limits)
+// Client uploads directly to Google Drive using the returned URL
+app.post('/api/upload/resumable', express.json(), async (req, res) => {
+    try {
+        if (!isConfigured()) {
+            return res.status(503).json({
+                success: false,
+                error: 'API not configured. Admin needs to set up the connection first.',
+            });
+        }
+
+        const { fileName, mimeType, fileSize, folderId } = req.body;
+
+        if (!fileName || !mimeType || !fileSize) {
+            return res.status(400).json({
+                success: false,
+                error: 'fileName, mimeType, and fileSize are required',
+            });
+        }
+
+        const drive = await getAuthenticatedDriveClient();
+        const targetFolderId = folderId || process.env.DEFAULT_FOLDER_ID;
+
+        const fileMetadata = {
+            name: fileName,
+            ...(targetFolderId && { parents: [targetFolderId] }),
+        };
+
+        // Initiate resumable upload session
+        const response = await drive.files.create({
+            requestBody: fileMetadata,
+            media: {
+                mimeType: mimeType,
+                body: '', // Empty body for initial request
+            },
+            fields: 'id, name, mimeType, size, webViewLink, webContentLink',
+        }, {
+            // Request resumable upload URL
+            params: { uploadType: 'resumable' },
+            headers: {
+                'X-Upload-Content-Type': mimeType,
+                'X-Upload-Content-Length': fileSize,
+            },
+        });
+
+        // The resumable upload URL is in the response headers
+        const uploadUrl = response.headers?.location;
+
+        if (!uploadUrl) {
+            // Alternative: return access token for client-side upload
+            const oauth2Client = getOAuth2Client();
+            oauth2Client.setCredentials({
+                refresh_token: adminTokens.refreshToken,
+            });
+            const { credentials } = await oauth2Client.refreshAccessToken();
+
+            return res.json({
+                success: true,
+                method: 'token',
+                accessToken: credentials.access_token,
+                folderId: targetFolderId,
+                expiresIn: 3600,
+            });
+        }
+
+        res.json({
+            success: true,
+            method: 'resumable',
+            uploadUrl: uploadUrl,
+        });
+    } catch (error) {
+        console.error('Resumable upload init error:', error);
+        
+        // Fallback: return access token for client-side upload
+        try {
+            const oauth2Client = getOAuth2Client();
+            oauth2Client.setCredentials({
+                refresh_token: adminTokens.refreshToken,
+            });
+            const { credentials } = await oauth2Client.refreshAccessToken();
+
+            res.json({
+                success: true,
+                method: 'token',
+                accessToken: credentials.access_token,
+                folderId: process.env.DEFAULT_FOLDER_ID,
+                expiresIn: 3600,
+            });
+        } catch (tokenError) {
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Failed to initialize upload',
+            });
+        }
+    }
+});
 
 // Upload file to admin's Google Drive (public endpoint)
 app.post('/api/upload', upload.single('file'), async (req, res) => {

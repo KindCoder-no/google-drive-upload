@@ -444,61 +444,59 @@
         progressContainer.classList.remove('d-none');
         uploadResult.innerHTML = '';
 
+        const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024; // 4MB - use resumable for larger files
+
         try {
-          const formData = new FormData();
+          const uploadedFiles = [];
           
-          if (selectedFiles.length === 1) {
-            formData.append('file', selectedFiles[0]);
+          for (let i = 0; i < selectedFiles.length; i++) {
+            const file = selectedFiles[i];
+            const progress = ((i) / selectedFiles.length) * 100;
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `Uploading ${file.name}... (${i + 1}/${selectedFiles.length})`;
 
-            const response = await fetch('/api/upload', {
-              method: 'POST',
-              body: formData,
-            });
-
-            const result = await response.json();
-            
-            if (result.success) {
-              progressBar.style.width = '100%';
-              progressText.textContent = 'Upload complete!';
-              uploadResult.innerHTML = `
-                <div class="alert alert-success">
-                  <i class="bi bi-check-circle me-2"></i>
-                  File uploaded successfully!
-                  ${result.file.webViewLink ? `<br><a href="${result.file.webViewLink}" target="_blank" class="text-success">View in Google Drive</a>` : ''}
-                </div>
-              `;
-              selectedFiles = [];
-              renderFileList();
+            if (file.size > LARGE_FILE_THRESHOLD) {
+              // Use resumable upload for large files
+              const result = await uploadLargeFile(file);
+              uploadedFiles.push(result);
             } else {
-              throw new Error(result.error);
-            }
-          } else {
-            selectedFiles.forEach(file => {
-              formData.append('files', file);
-            });
-
-            const response = await fetch('/api/upload/multiple', {
-              method: 'POST',
-              body: formData,
-            });
-
-            const result = await response.json();
-            
-            if (result.success) {
-              progressBar.style.width = '100%';
-              progressText.textContent = 'Upload complete!';
-              uploadResult.innerHTML = `
-                <div class="alert alert-success">
-                  <i class="bi bi-check-circle me-2"></i>
-                  ${result.files.length} files uploaded successfully!
-                </div>
-              `;
-              selectedFiles = [];
-              renderFileList();
-            } else {
-              throw new Error(result.error);
+              // Use regular upload for small files
+              const formData = new FormData();
+              formData.append('file', file);
+              
+              const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+              });
+              
+              const result = await response.json();
+              if (!result.success) throw new Error(result.error);
+              uploadedFiles.push(result.file);
             }
           }
+
+          progressBar.style.width = '100%';
+          progressText.textContent = 'Upload complete!';
+          
+          if (uploadedFiles.length === 1) {
+            uploadResult.innerHTML = `
+              <div class="alert alert-success">
+                <i class="bi bi-check-circle me-2"></i>
+                File uploaded successfully!
+                ${uploadedFiles[0].webViewLink ? `<br><a href="${uploadedFiles[0].webViewLink}" target="_blank" class="text-success">View in Google Drive</a>` : ''}
+              </div>
+            `;
+          } else {
+            uploadResult.innerHTML = `
+              <div class="alert alert-success">
+                <i class="bi bi-check-circle me-2"></i>
+                ${uploadedFiles.length} files uploaded successfully!
+              </div>
+            `;
+          }
+          
+          selectedFiles = [];
+          renderFileList();
         } catch (error) {
           uploadResult.innerHTML = `
             <div class="alert alert-danger">
@@ -514,6 +512,86 @@
           }, 2000);
         }
       });
+
+      // Upload large files directly to Google Drive using access token
+      async function uploadLargeFile(file) {
+        // Get access token from our API
+        const tokenResponse = await fetch('/api/upload/resumable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            fileSize: file.size,
+          }),
+        });
+
+        const tokenData = await tokenResponse.json();
+        if (!tokenData.success) throw new Error(tokenData.error);
+
+        // Upload directly to Google Drive
+        const metadata = {
+          name: file.name,
+          mimeType: file.type || 'application/octet-stream',
+        };
+        
+        if (tokenData.folderId) {
+          metadata.parents = [tokenData.folderId];
+        }
+
+        // Create multipart body
+        const boundary = '-------314159265358979323846';
+        const delimiter = "\r\n--" + boundary + "\r\n";
+        const closeDelim = "\r\n--" + boundary + "--";
+
+        const metadataString = JSON.stringify(metadata);
+        
+        // Read file as ArrayBuffer
+        const fileBuffer = await file.arrayBuffer();
+        
+        // Build multipart request body
+        const encoder = new TextEncoder();
+        const metadataPart = encoder.encode(
+          delimiter +
+          'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+          metadataString +
+          delimiter +
+          'Content-Type: ' + (file.type || 'application/octet-stream') + '\r\n' +
+          'Content-Transfer-Encoding: base64\r\n\r\n'
+        );
+        
+        // Convert file to base64
+        const base64File = btoa(
+          new Uint8Array(fileBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        );
+        const base64Part = encoder.encode(base64File);
+        const closePart = encoder.encode(closeDelim);
+
+        // Combine all parts
+        const body = new Uint8Array(metadataPart.length + base64Part.length + closePart.length);
+        body.set(metadataPart, 0);
+        body.set(base64Part, metadataPart.length);
+        body.set(closePart, metadataPart.length + base64Part.length);
+
+        const uploadResponse = await fetch(
+          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink,webContentLink',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${tokenData.accessToken}`,
+              'Content-Type': `multipart/related; boundary=${boundary}`,
+            },
+            body: body,
+          }
+        );
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(errorData.error?.message || 'Upload failed');
+        }
+
+        return await uploadResponse.json();
+      }
     </script>
   </body>
 </html>

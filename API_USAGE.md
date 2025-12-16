@@ -96,7 +96,60 @@ curl -X POST \
 
 ---
 
-### 3. Upload Multiple Files
+### 3. Upload Large Files (Resumable Upload)
+
+**POST** `/api/upload/resumable`
+
+For files larger than 4MB, use this endpoint to get an access token and upload directly to Google Drive, bypassing Vercel's body size limits.
+
+**Content-Type:** `application/json`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| fileName | string | Yes | Name of the file |
+| mimeType | string | Yes | MIME type of the file |
+| fileSize | number | Yes | Size of the file in bytes |
+| folderId | string | No | Google Drive folder ID |
+
+**Example Request:**
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"fileName": "large-video.mp4", "mimeType": "video/mp4", "fileSize": 104857600}' \
+  https://your-api.vercel.app/api/upload/resumable
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "method": "token",
+  "accessToken": "ya29.a0AfH...",
+  "folderId": "1abc123XYZ...",
+  "expiresIn": 3600
+}
+```
+
+**Then upload directly to Google Drive:**
+```javascript
+const metadata = { name: fileName, parents: [folderId] };
+const form = new FormData();
+form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+form.append('file', file);
+
+const response = await fetch(
+  'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+  {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+    body: form
+  }
+);
+```
+
+---
+
+### 4. Upload Multiple Files
 
 **POST** `/api/upload/multiple`
 
@@ -143,7 +196,7 @@ curl -X POST \
 
 ---
 
-### 4. Create Folder
+### 5. Create Folder
 
 **POST** `/api/folders`
 
