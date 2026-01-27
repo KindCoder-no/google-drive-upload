@@ -24,7 +24,7 @@
   },
   "homepage": "https://github.com/KindCoder-no/google-drive-upload#readme",
   "dependencies": {
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "dotenv": "^16.3.1",
     "express": "^4.19.2",
     "googleapis": "^131.0.0",
