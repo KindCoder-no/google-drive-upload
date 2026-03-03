@@ -28,6 +28,6 @@
     "dotenv": "^16.3.1",
     "express": "^4.19.2",
     "googleapis": "^131.0.0",
-    "multer": "^2.0.2"
+    "multer": "^2.1.0"
   }
 }
